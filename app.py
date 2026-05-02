@@ -3,139 +3,200 @@ import streamlit as st
 import base64
 from openai import OpenAI
 import openai
-#from PIL import Image
 import tensorflow as tf
 from PIL import Image, ImageOps
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
+# ─────────────────────────────
+# CONFIG
+# ─────────────────────────────
+st.set_page_config(page_title='Tablero Inteligente 💖', layout='wide')
+
+# 🎀 GIRLY STYLE
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Poppins', sans-serif;
+}
+
+/* Fondo */
+.stApp {
+    background: linear-gradient(135deg, #fff0f5, #ffe4ec);
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: #ffffff !important;
+    border-right: 2px solid #fbcfe8;
+}
+
+/* Títulos */
+h1 {
+    color: #be185d !important;
+    font-weight: 700 !important;
+}
+h2, h3 {
+    color: #9d174d !important;
+}
+
+/* Botones */
+.stButton > button {
+    background: linear-gradient(135deg, #f472b6, #ec4899) !important;
+    color: white !important;
+    border-radius: 12px !important;
+    border: none !important;
+    font-weight: 600 !important;
+    padding: 0.6rem 1.5rem !important;
+    transition: 0.2s;
+}
+.stButton > button:hover {
+    background: linear-gradient(135deg, #ec4899, #db2777) !important;
+    box-shadow: 0 4px 14px rgba(236,72,153,0.4);
+}
+
+/* Inputs */
+input, textarea {
+    border-radius: 10px !important;
+    border: 1px solid #f9a8d4 !important;
+}
+
+/* Slider */
+[data-baseweb="slider"] {
+    color: #ec4899 !important;
+}
+
+/* Canvas card */
+.canvas-card {
+    background: white;
+    border-radius: 18px;
+    padding: 18px;
+    border: 1px solid #fbcfe8;
+    box-shadow: 0 6px 18px rgba(236,72,153,0.15);
+    margin-bottom: 20px;
+}
+
+/* Texto */
+p, label {
+    color: #6b7280 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────
+# FUNCIONES
+# ─────────────────────────────
 Expert=" "
 profile_imgenh=" "
-    
+
 def encode_image_to_base64(image_path):
     try:
         with open(image_path, "rb") as image_file:
-            encoded_image = base64.b64encode(image_file.read()).decode("utf-8")
-            return encoded_image
+            return base64.b64encode(image_file.read()).decode("utf-8")
     except FileNotFoundError:
-        return "Error: La imagen no se encontró en la ruta especificada."
+        return None
 
+# ─────────────────────────────
+# UI
+# ─────────────────────────────
+st.title('🎀 Tablero Inteligente')
+st.subheader('Dibuja tu idea y deja que la IA la interprete ✨')
 
-# Streamlit 
-st.set_page_config(page_title='Tablero Inteligente')
-st.title('Tablero Inteligente')
 with st.sidebar:
-    st.subheader("Acerca de:")
-    st.subheader("En esta aplicación veremos la capacidad que ahora tiene una máquina de interpretar un boceto")
-st.subheader("Dibuja el boceto en el panel  y presiona el botón para analizarla")
+    st.subheader("💖 Acerca de")
+    st.markdown("""
+    Esta app permite:
+    
+    🎨 Dibujar bocetos  
+    🤖 Analizarlos con IA  
+    ✨ Obtener descripciones automáticas  
+    
+    ¡Explora tu creatividad!
+    """)
 
-# Add canvas component
-#bg_image = st.sidebar.file_uploader("Cargar Imagen:", type=["png", "jpg"])
-# Specify canvas parameters in application
+# Canvas settings
 drawing_mode = "freedraw"
-stroke_width = st.sidebar.slider('Selecciona el ancho de línea', 1, 30, 5)
-#stroke_color = '#FFFFFF' # Set background color to white
-#bg_color = '#000000'
-stroke_color = "#000000" 
+stroke_width = st.sidebar.slider('Grosor del trazo ✍️', 1, 30, 5)
+
+stroke_color = "#000000"
 bg_color = '#FFFFFF'
-#realtime_update = st.sidebar.checkbox("Update in realtime", True)
 
+st.markdown('<div class="canvas-card">', unsafe_allow_html=True)
 
-# Create a canvas component
 canvas_result = st_canvas(
-    fill_color="rgba(255, 165, 0, 0.3)",  # Fixed fill color with some opacity
+    fill_color="rgba(255, 192, 203, 0.3)",  # rosita 💕
     stroke_width=stroke_width,
     stroke_color=stroke_color,
     background_color=bg_color,
     height=300,
     width=400,
-    #background_image= None #Image.open(bg_image) if bg_image else None,
     drawing_mode=drawing_mode,
     key="canvas",
 )
 
-ke = st.text_input('Ingresa tu Clave')
-#os.environ['OPENAI_API_KEY'] = st.secrets['OPENAI_API_KEY']
+st.markdown('</div>', unsafe_allow_html=True)
+
+# API KEY
+ke = st.text_input('🔑 Ingresa tu API Key')
 os.environ['OPENAI_API_KEY'] = ke
-
-
-# Retrieve the OpenAI API Key from secrets
 api_key = os.environ['OPENAI_API_KEY']
 
-# Initialize the OpenAI client with the API key
 client = OpenAI(api_key=api_key)
 
-analyze_button = st.button("Analiza la imagen", type="secondary")
+# Botón
+analyze_button = st.button("✨ Analizar dibujo")
 
-# Check if an image has been uploaded, if the API key is available, and if the button has been pressed
+# ─────────────────────────────
+# LÓGICA
+# ─────────────────────────────
 if canvas_result.image_data is not None and api_key and analyze_button:
 
-    with st.spinner("Analizando ..."):
-        # Encode the image
+    with st.spinner("💭 Analizando tu dibujo..."):
         input_numpy_array = np.array(canvas_result.image_data)
         input_image = Image.fromarray(input_numpy_array.astype('uint8'),'RGBA')
         input_image.save('img.png')
-        
-      # Codificar la imagen en base64
- 
+
         base64_image = encode_image_to_base64("img.png")
-            
-        prompt_text = (f"Describe in spanish briefly the image")
-    
-      # Create the payload for the completion request
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt_text},
-                    {
-                        "type": "image_url",
-                        "image_url":f"data:image/png;base64,{base64_image}",
-                    },
-                ],
-            }
-        ]
-    
-        # Make the request to the OpenAI API
+
+        prompt_text = "Describe en español brevemente la imagen"
+
         try:
             full_response = ""
             message_placeholder = st.empty()
-            response = openai.chat.completions.create(
-              model= "gpt-4o-mini",  #o1-preview ,gpt-4o-mini
-              messages=[
-                {
-                   "role": "user",
-                   "content": [
-                     {"type": "text", "text": prompt_text},
-                     {
-                       "type": "image_url",
-                       "image_url": {
-                         "url": f"data:image/png;base64,{base64_image}",
-                       },
-                     },
-                   ],
-                  }
-                ],
-              max_tokens=500,
-              )
-            #response.choices[0].message.content
-            if response.choices[0].message.content is not None:
-                    full_response += response.choices[0].message.content
-                    message_placeholder.markdown(full_response + "▌")
-            # Final update to placeholder after the stream ends
-            message_placeholder.markdown(full_response)
-            if Expert== profile_imgenh:
-               st.session_state.mi_respuesta= response.choices[0].message.content #full_response 
-    
-            # Display the response in the app
-            #st.write(response.choices[0])
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
-else:
-    # Warnings for user action required
 
+            response = openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{base64_image}",
+                                },
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=500,
+            )
+
+            if response.choices[0].message.content:
+                full_response += response.choices[0].message.content
+                message_placeholder.markdown(f"💖 {full_response}")
+
+            if Expert == profile_imgenh:
+                st.session_state.mi_respuesta = response.choices[0].message.content
+
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+else:
     if not api_key:
-        st.warning("Por favor ingresa tu API key.")
+        st.warning("⚠️ Ingresa tu API key para continuar 💖")
